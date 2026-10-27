@@ -150,6 +150,32 @@ def resolved_base(directory: dict) -> str:
     return base_dn_from_domain(dns)
 
 
+class ReadOnlyDirectory:
+    """LDAP session that can search. Object writes are refused before they are sent."""
+
+    def __init__(self, conn) -> None:
+        if not getattr(conn, "read_only", False):
+            raise RuntimeError("Active Directory connections must be read-only.")
+        self._conn = conn
+
+    def search(self, *args, **kwargs):
+        return self._conn.search(*args, **kwargs)
+
+    def unbind(self) -> None:
+        self._conn.unbind()
+
+    @property
+    def response(self):
+        return self._conn.response
+
+    @property
+    def result(self):
+        return self._conn.result
+
+    def __getattr__(self, name: str):
+        raise RuntimeError("Active Directory is read-only. Helix does not change the directory.")
+
+
 def connect(directory: dict):
     ldap3 = _ldap3()
     server_name = str(directory.get("server") or "").strip()
@@ -181,12 +207,14 @@ def connect(directory: dict):
                 user=bind_user,
                 password=password,
                 authentication=auth,
+                auto_bind=False,
                 auto_referrals=False,
+                read_only=True,
                 receive_timeout=30,
                 raise_exceptions=True,
             )
             conn.bind()
-            return conn, bind_user
+            return ReadOnlyDirectory(conn), bind_user
         except Exception as exc:
             last = exc
     raise RuntimeError(f"Could not bind to {server_name}: {last}")
@@ -228,7 +256,7 @@ def test_directory(directory: dict | None = None) -> str:
         hit = any(item.get("type") == "searchResEntry" for item in (conn.response or []))
         if not hit:
             raise RuntimeError(f"Base DN not found: {base}")
-        return f"Connected to {directory['server']} as {bind_user}. Base {base} is readable."
+        return f"Connected read-only to {directory['server']} as {bind_user}. Base {base} is readable."
     finally:
         conn.unbind()
 

@@ -51,8 +51,8 @@ class SettingsPage(Gtk.Box):
         inner.append(Gtk.Label(label="Active Directory", xalign=0, css_classes=["card-title"]))
         inner.append(
             muted(
-                "Point this at a domain controller. Sync pulls computers, OUs, groups, and users. "
-                "Use a dedicated account. LDAPS is port 636."
+                "Point this at a domain controller. Sync reads computers, OUs, groups, and users into this inventory. "
+                "The directory connection is read-only. LDAPS is port 636."
             )
         )
         self.server = Gtk.Entry(placeholder_text="Domain controller host")
@@ -73,7 +73,7 @@ class SettingsPage(Gtk.Box):
         test.connect("clicked", self._test_directory)
         sync = Gtk.Button(label="Sync now")
         sync.connect("clicked", self._sync_directory)
-        stale = Gtk.Button(label="Delete computers missing from AD", css_classes=["destructive-action"])
+        stale = Gtk.Button(label="Remove inventory computers missing from the last sync", css_classes=["destructive-action"])
         stale.connect("clicked", self._delete_stale)
         for button in (save_dir, test, sync, stale):
             directory_buttons.append(button)

@@ -64,6 +64,60 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(ad.is_disabled(2), 1)
         self.assertEqual(ad.is_disabled(512), 0)
 
+    def test_directory_connection_is_read_only(self) -> None:
+        import sys
+        import types
+
+        calls: dict = {}
+
+        class FakeConn:
+            def __init__(self, *args, **kwargs):
+                calls["kwargs"] = kwargs
+                self.read_only = kwargs.get("read_only", False)
+                self.response = []
+                self.result = {}
+
+            def bind(self):
+                calls["bound"] = True
+                return True
+
+            def add(self, *args, **kwargs):
+                calls["wrote"] = True
+
+        class FakeServer:
+            def __init__(self, *args, **kwargs):
+                pass
+
+        mod = types.ModuleType("ldap3")
+        mod.Connection = FakeConn
+        mod.Server = FakeServer
+        mod.Tls = lambda **kwargs: None
+        mod.NTLM = "NTLM"
+        mod.SIMPLE = "SIMPLE"
+        mod.NONE = "NONE"
+        sys.modules["ldap3"] = mod
+        try:
+            conn, bind_user = ad.connect(
+                {
+                    "server": "dc.shop.local",
+                    "username": "reader",
+                    "password": "secret",
+                    "dns_domain": "shop.local",
+                    "port": 389,
+                }
+            )
+        finally:
+            sys.modules.pop("ldap3", None)
+        self.assertEqual(bind_user, "reader@shop.local")
+        self.assertTrue(calls["kwargs"]["read_only"])
+        self.assertTrue(calls["bound"])
+        with self.assertRaises(RuntimeError):
+            conn.add("CN=new,DC=shop,DC=local")
+        self.assertNotIn("wrote", calls)
+        source = Path(ad.__file__).read_text(encoding="utf-8")
+        for token in (".add(", ".delete(", ".modify(", ".modify_dn(", ".extended("):
+            self.assertNotIn(token, source)
+
     def test_migration_adds_directory_columns(self) -> None:
         self.store.close()
         path = Path(self._dir.name) / "old.db"

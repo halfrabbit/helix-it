@@ -386,9 +386,9 @@ def directory_sync(ctx: Ctx, form: Form, _files) -> str:
 
 def directory_stale(ctx: Ctx, form: Form, _files) -> str:
     if form.get("confirm") != "yes":
-        return go("/settings", error="Check the box to delete computers missing from the last sync.")
+        return go("/settings", error="Check the box to remove those computers from this inventory.")
     count = ctx.store.delete_stale_directory_computers()
-    return go("/settings", notice=f"Removed {count} computers missing from the last sync")
+    return go("/settings", notice=f"Removed {count} computers from this inventory")
 
 
 def credential_save(ctx: Ctx, form: Form, _files) -> str:

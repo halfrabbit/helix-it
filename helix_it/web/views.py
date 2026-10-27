@@ -508,6 +508,7 @@ def settings(ctx: Ctx) -> str:
       <button type="submit">Save shop</button>
     </form>
     <h2>Active Directory</h2>
+    <p class="muted">Sync reads computers, OUs, groups, and users into this inventory. The directory connection is read-only.</p>
     <form class="stack" method="post" action="/act/directory-save">{ctx.hidden()}
       <label>Domain controller <input name="server" value="{h(directory.get('server') or '')}"></label>
       <label>Port <input name="port" value="{h(directory.get('port') or 389)}"></label>
@@ -524,8 +525,8 @@ def settings(ctx: Ctx) -> str:
       </div>
     </form>
     <form method="post" action="/act/directory-stale">{ctx.hidden()}
-      <label class="checks"><input type="checkbox" name="confirm" value="yes"> Delete computers that were missing from the last directory sync</label>
-      <button class="danger" type="submit">Delete missing computers</button>
+      <label class="checks"><input type="checkbox" name="confirm" value="yes"> Remove computers from this inventory that were missing from the last directory sync</label>
+      <button class="danger" type="submit">Remove from inventory</button>
     </form>
     <h2>Scan accounts</h2>
     <ul>{''.join(cred_rows) or '<li class="muted">No accounts saved.</li>'}</ul>

@@ -46,7 +46,7 @@ Network scan only pings **private addresses** on this machine.
 
 ## Active Directory and Windows
 
-In **Settings → Active Directory**, enter the domain controller, DNS domain, NetBIOS name, and a directory account. **Test connection** checks the bind. **Sync now** imports computers, OUs, groups, and users. Computers that later disappear from the directory stay in inventory until you delete the ones missing from the last sync.
+In **Settings → Active Directory**, enter the domain controller, DNS domain, NetBIOS name, and a directory account. **Test connection** checks the bind. **Sync now** reads computers, OUs, groups, and users into the local inventory. The LDAP connection is read-only: Helix searches the directory and does not create, change, or delete directory objects. Computers that later disappear from the directory stay in inventory until you remove the ones missing from the last sync. That removal only deletes rows in this database.
 
 Windows scans and installs use **WinRM**. On each target (or by Group Policy):
 
