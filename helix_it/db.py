@@ -1118,15 +1118,14 @@ class Store:
             (deployment_id,),
         )
         states = {row["status"] for row in rows}
-        if not rows or "failed" in states:
-            status = "failed" if rows else "failed"
+        in_progress = {"queued", "running", "copying"}
+        if not rows:
+            status = "failed"
+        elif states & in_progress:
+            status = "running"
         elif states <= {"success"}:
             status = "success"
-        elif "queued" in states or "running" in states or "copying" in states:
-            status = "running"
         else:
-            status = "failed"
-        if not rows:
             status = "failed"
         finished = None if status == "running" else utcnow()
         self.execute(

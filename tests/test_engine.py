@@ -177,6 +177,72 @@ class EngineTests(unittest.TestCase):
         self.assertTrue(daily.endswith("02:00:00+00:00"))
         self.assertIsNone(schedules.compute_next("heartbeat", None, None, now))
 
+    def test_rollup_distinguishes_empty_running_and_failed(self) -> None:
+        package_id = self.store.add_package("Rollup", "1", "status rollup")
+        empty_id = int(
+            self.store.execute(
+                "INSERT INTO deployments(package_id, name, status, created_at) VALUES (?, ?, 'queued', ?)",
+                (package_id, "empty", "2026-10-27T00:00:00+00:00"),
+            ).lastrowid
+        )
+        self.assertEqual(self.store.rollup_deployment(empty_id), "failed")
+
+        left = self.store.add_device(name="left", type="computer", status="online")
+        right = self.store.add_device(name="right", type="computer", status="online")
+        mixed_id = self.store.create_deployment(package_id, "mixed", [left, right], None)
+        targets = self.store.deployment_targets(mixed_id)
+        self.store.update_target(int(targets[0]["id"]), status="failed")
+        self.store.update_target(int(targets[1]["id"]), status="running")
+        self.assertEqual(self.store.rollup_deployment(mixed_id), "running")
+        self.assertIsNone(self.store.deployment(mixed_id)["finished_at"])
+
+        self.store.update_target(int(targets[1]["id"]), status="success")
+        self.assertEqual(self.store.rollup_deployment(mixed_id), "failed")
+        self.assertIsNotNone(self.store.deployment(mixed_id)["finished_at"])
+
+        done_id = self.store.create_deployment(package_id, "done", [left], None)
+        done = self.store.deployment_targets(done_id)[0]
+        self.store.update_target(int(done["id"]), status="success")
+        self.assertEqual(self.store.rollup_deployment(done_id), "success")
+
+    def test_step_exception_uses_exit_code_one(self) -> None:
+        device_id = self.store.add_device(name="console", hostname="console", type="computer", os="Linux", status="online")
+        package_id = self.store.add_package("Boom", "1", "exception exit code")
+        self.store.add_step(package_id, kind="command", name="ok", payload="echo ok", success_codes="0")
+        self.store.add_step(
+            package_id,
+            kind="command",
+            name="bad",
+            payload="echo bad",
+            success_codes="0",
+            continue_on_error=0,
+        )
+        deployment_id = deployer.create_deployment(self.store, package_id, [device_id], None)
+        target_id = int(self.store.deployment_targets(deployment_id)[0]["id"])
+        device = self.store.device(device_id)
+        steps = self.store.package_steps(package_id)
+        calls = {"n": 0}
+
+        def fake_run_step(*_args, **_kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return 0
+            raise RuntimeError("step exploded")
+
+        original = deployer._run_step
+        deployer._run_step = fake_run_step
+        try:
+            ok, code = deployer._run_steps(
+                self.store, device, steps, target_id, deployment_id, None, 30, 0
+            )
+        finally:
+            deployer._run_step = original
+        self.assertFalse(ok)
+        self.assertEqual(code, 1)
+        target = self.store.fetchone("SELECT exit_code, log FROM deployment_targets WHERE id = ?", (target_id,))
+        self.assertEqual(target["exit_code"], 1)
+        self.assertIn("bad failed: step exploded", target["log"])
+
     def test_secrets_file_mode(self) -> None:
         path = Path(self._dir.name) / "secrets.json"
         secrets.set_directory({"server": "dc.shop.local", "password": "secret", "dns_domain": "shop.local"}, path)

@@ -132,7 +132,7 @@ def _run_steps(store, device, steps, target_id, deployment_id, credential, timeo
         raise RuntimeError("Nested packages are nested too deeply.")
     fact = store.fact_for(int(device["id"])) or {"text": {}, "lists": {}}
     failed = False
-    code: int | None = 0
+    code: int | None = None
     if not steps:
         _note(store, target_id, "running", "Package has no steps.")
         return True, 0
@@ -151,7 +151,7 @@ def _run_steps(store, device, steps, target_id, deployment_id, credential, timeo
         try:
             code = _run_step(store, device, step, target_id, deployment_id, credential, timeout, depth)
         except Exception as exc:
-            code = code if code is not None else 1
+            code = 1
             _note(store, target_id, "running", f"{step['name']} failed: {exc}", exit_code=code)
             if int(step["continue_on_error"] or 0):
                 failed = True
@@ -160,7 +160,7 @@ def _run_steps(store, device, steps, target_id, deployment_id, credential, timeo
         if step["kind"] == "reboot":
             _note(store, target_id, "running", "Reboot requested. Later steps were not run.")
             return not failed, code
-    return not failed, code
+    return not failed, 0 if code is None else code
 
 
 def _run_step(store, device, step, target_id, deployment_id, credential, timeout, depth: int) -> int:
