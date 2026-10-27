@@ -1,0 +1,24 @@
+[project]
+name = "helix-it"
+version = "0.2.0"
+description = "A Linux console for IT inventory and software deploy, with Active Directory and WinRM for Windows computers."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Helix IT" }]
+
+[project.scripts]
+helix-it = "helix_it.app:main"
+helix-web = "helix_it.web.server:main"
+
+[project.optional-dependencies]
+directory = ["ldap3>=2.9", "pywinrm>=0.4", "smbprotocol>=1.13"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["helix_it*"]
+
+[tool.setuptools.package-data]
+helix_it = ["style.css", "icon.svg", "web/static/app.css"]

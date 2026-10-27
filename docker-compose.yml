@@ -1,0 +1,33 @@
+# Joins the existing TrueNAS macvlan "loc" (192.168.1.0/24).
+# Copy .env.example to .env and set HELIX_IP to a free address on that subnet.
+
+services:
+  helix:
+    build: .
+    image: helix-it:latest
+    container_name: helix-it
+    cap_add:
+      - NET_RAW
+      - NET_BROADCAST
+    environment:
+      HELIX_DATA: /data
+      HELIX_BIND: 0.0.0.0
+      HELIX_PORT: "8080"
+      HELIX_ADMIN_USER: ${HELIX_ADMIN_USER:-admin}
+      HELIX_ADMIN_PASSWORD: ${HELIX_ADMIN_PASSWORD:-}
+      HELIX_ORG: ${HELIX_ORG:-Helix IT}
+      HELIX_SAMPLE: ${HELIX_SAMPLE:-0}
+    volumes:
+      - ${HELIX_DATA_PATH:-./data}:/data
+      - ${HELIX_PACKAGES_PATH:-./packages}:/data/packages
+    networks:
+      loc:
+        ipv4_address: ${HELIX_IP:?Set HELIX_IP in .env to a free address on 192.168.1.0/24}
+    dns:
+      - ${HELIX_DNS:-192.168.1.1}
+    restart: unless-stopped
+
+networks:
+  loc:
+    external: true
+    name: loc
