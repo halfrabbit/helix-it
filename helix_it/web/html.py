@@ -5,18 +5,26 @@ from dataclasses import dataclass
 from typing import Any
 
 
-NAV = (
-    ("/", "Dashboard"),
-    ("/inventory", "Inventory"),
-    ("/collections", "Collections"),
-    ("/deploy", "Deploy"),
-    ("/tickets", "Help desk"),
-    ("/network", "Network"),
-    ("/software", "Software"),
-    ("/people", "People"),
-    ("/reports", "Reports"),
-    ("/settings", "Settings"),
-    ("/agents", "Agents"),
+GROUPS = (
+    ("Inventory", (
+        ("/inventory", "Computers"),
+        ("/collections", "Collections"),
+        ("/software", "Applications"),
+        ("/reports", "Reports"),
+    )),
+    ("Deploy", (
+        ("/deploy", "Packages"),
+    )),
+    ("Directory", (
+        ("/people", "Users"),
+        ("/network", "Network"),
+    )),
+    ("Shop", (
+        ("/", "Overview"),
+        ("/tickets", "Help desk"),
+        ("/settings", "Options"),
+        ("/agents", "Agents"),
+    )),
 )
 
 
@@ -46,10 +54,20 @@ def select(name: str, pairs: list[tuple[Any, Any]], current: Any = "") -> str:
     return f'<select name="{h(name)}">{"".join(options)}</select>'
 
 
-def page(title: str, body: str, *, username: str, csrf: str = "", notice: str = "", error: str = "", job: str = "", detail: str = "", busy: bool = False) -> str:
-    links = []
-    for href, label in NAV:
-        links.append(f'<a href="{href}">{h(label)}</a>')
+def _active(href: str, current: str) -> bool:
+    if href == "/":
+        return current in {"", "/"}
+    return current == href or current.startswith(href + "/")
+
+
+def page(title: str, body: str, *, username: str, csrf: str = "", notice: str = "", error: str = "", job: str = "", detail: str = "", busy: bool = False, current: str = "") -> str:
+    trees = []
+    for group, links in GROUPS:
+        items = []
+        for href, label in links:
+            mark = " active" if _active(href, current) else ""
+            items.append(f'<a class="{mark.strip()}" href="{href}">{h(label)}</a>')
+        trees.append(f'<p class="tree-label">{h(group)}</p><nav>{"".join(items)}</nav>')
     banner = ""
     if error:
         banner += f'<p class="banner bad">{h(error)}</p>'
@@ -64,25 +82,32 @@ def page(title: str, body: str, *, username: str, csrf: str = "", notice: str = 
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body data-busy="{"1" if busy else "0"}">
-  <aside>
-    <p class="mark">HELIX IT</p>
-    <p class="brand">Shared console</p>
-    <nav>{"".join(links)}</nav>
-    <form method="post" action="/act/logout" class="logout">
-      <input type="hidden" name="csrf" value="{h(csrf)}">
-      <p>{h(username)}</p>
-      <button type="submit">Sign out</button>
-    </form>
-  </aside>
-  <main>
-    <header>
-      <h1>{h(title)}</h1>
-      <p id="job">{h(job or "Idle")}</p>
-      <pre id="job-detail">{h(detail)}</pre>
-    </header>
-    {banner}
-    {body}
-  </main>
+  <header class="titlebar">
+    <span class="mark">HELIX</span>
+    <span class="product">Inventory · Deploy</span>
+    <span class="spacer"></span>
+    <span class="who">{h(username)}</span>
+  </header>
+  <div class="workspace">
+    <aside>
+      {"".join(trees)}
+      <form method="post" action="/act/logout" class="logout">
+        <input type="hidden" name="csrf" value="{h(csrf)}">
+        <button type="submit">Sign out</button>
+      </form>
+    </aside>
+    <div class="work">
+      <div class="toolbar"><h1>{h(title)}</h1></div>
+      <div class="sheet">
+        {banner}
+        {body}
+      </div>
+      <footer class="statusbar">
+        <span id="job">{h(job or "Ready")}</span>
+        <pre id="job-detail">{h(detail)}</pre>
+      </footer>
+    </div>
+  </div>
   <script>
     let wasBusy = document.body.dataset.busy === "1";
     async function poll() {{
@@ -117,9 +142,9 @@ def login_page(error: str = "") -> str:
 </head>
 <body class="login-body">
   <form class="login" method="post" action="/login">
-    <p class="mark">HELIX IT</p>
+    <header class="titlebar"><span class="mark">HELIX</span><span class="product">Inventory · Deploy</span></header>
     <h1>Sign in</h1>
-    <p class="muted">Shared inventory and deploy for the shop. Each agent uses their own login.</p>
+    <p class="muted">Shop inventory and deploy. Each agent uses their own login.</p>
     {banner}
     <label>Username <input name="username" autocomplete="username" required></label>
     <label>Password <input name="password" type="password" autocomplete="current-password" required></label>

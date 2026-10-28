@@ -24,6 +24,17 @@ def _badge(status: str | None) -> str:
     return f'<span class="badge {h(value)}">{h(value)}</span>'
 
 
+def _tabs(panels: list[tuple[str, str]]) -> str:
+    controls = []
+    pages = []
+    for index, (label, body) in enumerate(panels):
+        checked = " checked" if index == 0 else ""
+        controls.append(f'<input type="radio" name="detail" id="tab{index}"{checked}>')
+        controls.append(f'<label for="tab{index}">{h(label)}</label>')
+        pages.append(f'<div class="tabpage" data-tab="{index}">{body}</div>')
+    return f'<div class="tabs">{"".join(controls)}{"".join(pages)}</div>'
+
+
 def _bars(rows: list[tuple[str, int]]) -> str:
     peak = max((value for _, value in rows), default=1) or 1
     lines = []
@@ -70,29 +81,42 @@ def inventory(ctx: Ctx) -> str:
         rows = [row for row in rows if int(row["id"]) in allowed]
     body = []
     for row in rows:
-        bits = " · ".join(part for part in (row["ip"], row["os"], row["ou"] or row["type"]) if part)
         body.append(
-            f"<tr><td><a href='/inventory/{row['id']}'>{h(row['name'])}</a><br><span class='muted'>{h(bits)}</span></td>"
-            f"<td>{_badge(row['status'])}</td><td>{h(row['scan_status'] or '')}</td></tr>"
+            "<tr>"
+            f"<td><a href='/inventory/{row['id']}'>{h(row['name'])}</a></td>"
+            f"<td>{_badge(row['status'])}</td>"
+            f"<td>{h(row['ip'] or '')}</td>"
+            f"<td>{h(row['os'] or '')}</td>"
+            f"<td>{h(row['ou'] or row['type'] or '')}</td>"
+            f"<td>{h(row['scan_status'] or '')}</td>"
+            "</tr>"
         )
     type_pairs = [("all", "All types"), *((item, item) for item in TYPES)]
     collections = [("", "All computers")] + [(row["id"], row["name"]) for row in ctx.store.collections()]
-    filters = f"""
-    <form class="row" method="get" action="/inventory">
-      <label>Search <input name="q" value="{h(query)}" placeholder="Name, IP, OS, OU"></label>
-      <label>Type {select("type", type_pairs, kind)}</label>
-      <label>Collection {select("collection", collections, collection)}</label>
-      <button type="submit">Filter</button>
-    </form>"""
-    scan_all = f"""
-    <form method="post" action="/act/scan-windows">{ctx.hidden()}
-      <button type="submit">Scan Windows and this host</button>
-    </form>"""
-    table = "<table><tr><th>Computer</th><th>Status</th><th>Scan</th></tr>" + "".join(body) + "</table>"
+    command = f"""
+    <div class="commandbar">
+      <form class="row" method="get" action="/inventory">
+        <label>Find <input name="q" value="{h(query)}" placeholder="Name, IP, OS, OU"></label>
+        <label>Type {select("type", type_pairs, kind)}</label>
+        <label>Collection {select("collection", collections, collection)}</label>
+        <button type="submit">Apply</button>
+      </form>
+      <form method="post" action="/act/scan-windows">{ctx.hidden()}
+        <button class="primary" type="submit">Scan</button>
+      </form>
+    </div>"""
+    table = (
+        "<div class='gridwrap'><table class='grid'><thead><tr>"
+        "<th>Name</th><th>Status</th><th>IP address</th><th>Operating system</th><th>OU</th><th>Scan</th>"
+        "</tr></thead><tbody>"
+        + "".join(body)
+        + "</tbody></table></div>"
+        + f"<p class='gridcount'>{len(rows)} computers</p>"
+    )
     if not body:
         table = "<p class='muted'>No computers match.</p>"
     add = f"""
-    <h2>Add a computer</h2>
+    <details class="drawer"><summary>Add a computer</summary>
     <form class="stack" method="post" action="/act/device-save">{ctx.hidden()}
       <label>Name <input name="name" required></label>
       <label>Hostname <input name="hostname"></label>
@@ -100,8 +124,8 @@ def inventory(ctx: Ctx) -> str:
       <label>OS <input name="os"></label>
       <label>Type {select("type", [(item, item) for item in TYPES], "computer")}</label>
       <button class="primary" type="submit">Add</button>
-    </form>"""
-    return filters + '<div class="row">' + scan_all + "</div>" + table + add
+    </form></details>"""
+    return command + table + add
 
 
 def device(ctx: Ctx, device_id: int) -> str:
@@ -128,21 +152,38 @@ def device(ctx: Ctx, device_id: int) -> str:
     if row["ram_gb"]:
         facts += f"<tr><th>RAM</th><td>{h(row['ram_gb'])} GB</td></tr>"
     apps = ctx.store.device_software(device_id)
-    app_html = "".join(f"<li>{h(item['name'])} {h(item['version'] or '')}</li>" for item in apps[:80])
-    if len(apps) > 80:
-        app_html += f"<li class='muted'>Showing 80 of {len(apps)}.</li>"
-    hotfixes = "".join(f"<li>{h(item['hotfix_id'])} {h(item['installed_on'] or '')}</li>" for item in ctx.store.child_rows("hotfixes", device_id)[:40])
-    services = "".join(
-        f"<li>{h(item['name'])} — {h(item['status'] or '')}</li>" for item in ctx.store.child_rows("services", device_id)[:40]
+    app_rows = "".join(
+        f"<tr><td>{h(item['name'])}</td><td>{h(item['version'] or '')}</td><td>{h(item['publisher'] or '')}</td></tr>"
+        for item in apps[:200]
+    )
+    app_html = (
+        "<table class='grid'><thead><tr><th>Name</th><th>Version</th><th>Publisher</th></tr></thead><tbody>"
+        + (app_rows or "<tr><td colspan='3'>None recorded.</td></tr>")
+        + "</tbody></table>"
+    )
+    if len(apps) > 200:
+        app_html += f"<p class='muted'>Showing 200 of {len(apps)}.</p>"
+    hotfix_rows = "".join(
+        f"<tr><td>{h(item['hotfix_id'])}</td><td>{h(item['installed_on'] or '')}</td></tr>"
+        for item in ctx.store.child_rows("hotfixes", device_id)[:80]
+    )
+    hotfixes = (
+        "<table class='grid'><thead><tr><th>Hotfix</th><th>Installed</th></tr></thead><tbody>"
+        + (hotfix_rows or "<tr><td colspan='2'>None recorded.</td></tr>")
+        + "</tbody></table>"
+    )
+    service_rows = "".join(
+        f"<tr><td>{h(item['name'])}</td><td>{h(item['status'] or '')}</td></tr>"
+        for item in ctx.store.child_rows("services", device_id)[:80]
+    )
+    services = (
+        "<table class='grid'><thead><tr><th>Service</th><th>Status</th></tr></thead><tbody>"
+        + (service_rows or "<tr><td colspan='2'>None recorded.</td></tr>")
+        + "</tbody></table>"
     )
     packages = [(item["id"], item["name"]) for item in ctx.store.packages()]
     creds = [("", "Default scan account")] + [(item["name"], item["name"]) for item in secrets.credentials()]
     actions = f"""
-    <div class="row">
-      <form method="post" action="/act/scan">{ctx.hidden()}<input type="hidden" name="device_id" value="{device_id}"><button class="primary" type="submit">Scan</button></form>
-      <form method="post" action="/act/wake">{ctx.hidden()}<input type="hidden" name="device_id" value="{device_id}"><button type="submit">Wake</button></form>
-      <form method="post" action="/act/tool">{ctx.hidden()}<input type="hidden" name="device_id" value="{device_id}"><input type="hidden" name="kind" value="reboot"><button class="danger" type="submit">Reboot</button></form>
-    </div>
     <form class="stack" method="post" action="/act/deploy">{ctx.hidden()}
       <input type="hidden" name="device_id" value="{device_id}">
       <label>Package {select("package_id", packages, "")}</label>
@@ -171,15 +212,19 @@ def device(ctx: Ctx, device_id: int) -> str:
       <button class="danger" type="submit">Remove from inventory</button>
     </form>"""
     return f"""
-    <p>{_badge(row['status'])} {_badge(row['scan_status'] or 'never')}</p>
-    <div class="split">
-      <section class="panel"><table>{facts}</table>
-        <h2>Applications</h2><ul>{app_html or '<li class="muted">None recorded.</li>'}</ul>
-        <h2>Updates</h2><ul>{hotfixes or '<li class="muted">None recorded.</li>'}</ul>
-        <h2>Services</h2><ul>{services or '<li class="muted">None recorded.</li>'}</ul>
-      </section>
-      <section>{actions}{edit}</section>
-    </div>"""
+    <div class="commandbar">
+      <span>{_badge(row['status'])} {_badge(row['scan_status'] or 'never')}</span>
+      <form method="post" action="/act/scan">{ctx.hidden()}<input type="hidden" name="device_id" value="{device_id}"><button class="primary" type="submit">Scan</button></form>
+      <form method="post" action="/act/wake">{ctx.hidden()}<input type="hidden" name="device_id" value="{device_id}"><button type="submit">Wake</button></form>
+      <form method="post" action="/act/tool">{ctx.hidden()}<input type="hidden" name="device_id" value="{device_id}"><input type="hidden" name="kind" value="reboot"><button class="danger" type="submit">Reboot</button></form>
+    </div>
+    {_tabs([
+        ("Computer", f"<table class='props'>{facts}</table>"),
+        ("Applications", app_html),
+        ("Hotfixes", hotfixes),
+        ("Services", services),
+        ("Tools", actions + edit),
+    ])}"""
 
 
 def collections(ctx: Ctx) -> str:
@@ -256,7 +301,11 @@ def deploy(ctx: Ctx) -> str:
     selected = ctx.query.get("package", "")
     package_rows = []
     for row in ctx.store.packages():
-        package_rows.append(f"<li><a href='/deploy?package={row['id']}'>{h(row['name'])}</a> {h(row['version'] or '')}</li>")
+        package_rows.append(
+            f"<li class='{'picked' if str(row['id']) == selected else ''}'>"
+            f"<a href='/deploy?package={row['id']}'>{h(row['name'])}</a> "
+            f"<span class='muted'>{h(row['version'] or '')}</span></li>"
+        )
     steps = ""
     editor = ""
     if selected.isdigit():
@@ -350,7 +399,7 @@ def deploy(ctx: Ctx) -> str:
     </form>"""
     return f"""
     <div class="split">
-      <section><h2>Packages</h2><ul>{''.join(package_rows) or '<li class="muted">None yet.</li>'}</ul>{new_package}{steps}{editor}</section>
+      <section class="library"><h2>Packages</h2><ul>{''.join(package_rows) or '<li class="muted">None yet.</li>'}</ul>{new_package}{steps}{editor}</section>
       <section>{launch}</section>
     </div>
     <h2>History</h2>{''.join(history) or '<p class="muted">No deployments yet.</p>'}

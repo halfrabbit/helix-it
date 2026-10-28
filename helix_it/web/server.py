@@ -107,6 +107,7 @@ class Handler(BaseHTTPRequestHandler):
                 job=snap["message"],
                 detail=snap["detail"],
                 busy=snap["busy"],
+                current=path,
             ),
         )
 
