@@ -166,6 +166,7 @@ class Handler(BaseHTTPRequestHandler):
             "/reports": ("Reports", views.reports),
             "/settings": ("Settings", views.settings),
             "/agents": ("Agents", views.agents),
+            "/about": ("About", views.about),
         }
         if path in simple:
             title, fn = simple[path]

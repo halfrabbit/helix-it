@@ -24,6 +24,7 @@ GROUPS = (
         ("/tickets", "Help desk"),
         ("/settings", "Options"),
         ("/agents", "Agents"),
+        ("/about", "About"),
     )),
 )
 

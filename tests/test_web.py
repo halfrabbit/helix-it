@@ -157,6 +157,7 @@ class ServerTests(unittest.TestCase):
             "/reports",
             "/settings",
             "/agents",
+            "/about",
             "/health",
             "/static/app.css",
         ):
@@ -168,6 +169,20 @@ class ServerTests(unittest.TestCase):
             status, _headers, payload = self.request("GET", f"/inventory/{int(device['id'])}", cookie=cookie)
             self.assertEqual(status, 200)
             self.assertIn(b"Scan", payload)
+
+    def test_about_page(self) -> None:
+        from helix_it import __version__
+        from helix_it.about import commits_behind_master
+
+        cookie = self.login()
+        status, _headers, payload = self.request("GET", "/about", cookie=cookie)
+        self.assertEqual(status, 200)
+        self.assertIn(__version__.encode(), payload)
+        self.assertIn(b"Commits behind master", payload)
+        count, ref = commits_behind_master()
+        self.assertIsNotNone(count)
+        self.assertIn(str(count).encode(), payload)
+        self.assertIn(ref.encode(), payload)
 
     def test_add_agent(self) -> None:
         cookie = self.login()
