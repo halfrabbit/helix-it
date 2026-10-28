@@ -632,3 +632,19 @@ def agents(ctx: Ctx) -> str:
       <label>New password <input name="password" type="password" required></label>
       <button type="submit">Update password</button>
     </form>"""
+
+
+def about(_ctx: Ctx) -> str:
+    from helix_it.about import app_version, commits_behind_master
+
+    count, ref = commits_behind_master()
+    if count is None:
+        behind = "Not available. This copy has no master branch to compare."
+    else:
+        noun = "commit" if count == 1 else "commits"
+        behind = f"{count} {noun} behind {ref}"
+    return f"""
+    <table class="props">
+      <tr><th>Version</th><td>{h(app_version())}</td></tr>
+      <tr><th>Commits behind master</th><td>{h(behind)}</td></tr>
+    </table>"""
